@@ -9,6 +9,8 @@ from ckanext.ldap.logic.auth.create import user_create
 from ckanext.ldap.model.ldap_user import setup as model_setup
 from ckanext.ldap.lib.helpers import is_ldap_user
 
+import ckanext.ldap.logic.action as action
+
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +30,15 @@ class LdapPlugin(p.SingletonPlugin):
     p.implements(p.IRoutes, inherit=True)
     p.implements(p.IAuthFunctions)
     p.implements(p.ITemplateHelpers, inherit=True)
+    p.implements(p.IActions)
+
+
+    #IActions: Add User via Curl
+    def get_actions(self):
+        actions = {'add_ckan_user': action.add_ckan_user,
+                   'ldap_check_api_create': action.ldap_check_api_create}
+        return actions
+
 
     def update_config(self, config):
         """Implement IConfiguer.update_config
@@ -71,7 +82,9 @@ class LdapPlugin(p.SingletonPlugin):
             'ckanext.ldap.organization.id': {},
             'ckanext.ldap.organization.role': {'default': 'member', 'validate': _allowed_roles},
             'ckanext.ldap.ckan_fallback': {'default': False, 'parse': p.toolkit.asbool},
-            'ckanext.ldap.prevent_edits': {'default': False, 'parse': p.toolkit.asbool}
+            'ckanext.ldap.prevent_edits': {'default': False, 'parse': p.toolkit.asbool},
+            'ckanext.ldap.mail_prefix': {}
+
         }
         errors = []
         for i in schema:

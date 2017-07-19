@@ -16,6 +16,7 @@ from pylons import config
 import ckan.logic as logic
 ValidationError = logic.ValidationError
 
+
 log = logging.getLogger(__name__)
 
 
@@ -29,9 +30,12 @@ class UserController(p.toolkit.BaseController):
     def login_handler(self):
         """Action called when login in via the LDAP login form"""
         params = request.POST
+        #print params
         if 'login' in params and 'password' in params:
             login = params['login']
             password = params['password']
+            if not password: # ldap does not allow emtpy password; Anja 21.6.2017
+                self._login_failed(error=_('Please enter a username and password'))
             try:
                 ldap_user_dict = _find_ldap_user(login)
             except MultipleMatchError as e:
@@ -103,12 +107,20 @@ def _ckan_user_exists(user_name):
     @param user_name: User name to check
     @return: Dictionary defining 'exists' and 'ldap'.
     """
+
+    #print "**************** Anja ckan_user_exists"
     try:
         user = p.toolkit.get_action('user_show')(data_dict = {'id': user_name})
     except p.toolkit.ObjectNotFound:
+        #print "Here we are"
         return {'exists': False, 'is_ldap': False}
 
+    #print "Here we are too"
+
+    #print user
     ldap_user = LdapUser.by_user_id(user['id'])
+    #print ldap_user
+
     if ldap_user:
         return {'exists': True, 'is_ldap': True}
     else:
@@ -141,6 +153,7 @@ def _get_or_create_ldap_user(ldap_user_dict):
     """
     # Look for existing user, and if found return it.
     ldap_user = LdapUser.by_ldap_id(ldap_user_dict['username'])
+
     if ldap_user:
         # TODO: Update the user detail.
         return ldap_user.user.name
@@ -169,6 +182,7 @@ def _get_or_create_ldap_user(ldap_user_dict):
         data_dict=user_dict
     )
     ldap_user = LdapUser(user_id=ckan_user['id'], ldap_id = ldap_user_dict['username'])
+
     ckan.model.Session.add(ldap_user)
     ckan.model.Session.commit()
     # Add the user to it's group if needed
@@ -192,22 +206,25 @@ def _find_ldap_user(login):
     @return: None if no user is found, a dictionary defining 'cn', 'username', 'fullname' and 'email otherwise.
     """
     cnx = ldap.initialize(config['ckanext.ldap.uri'])
+    #print "************ ANJA LDAP"
+    #print login
     if config.get('ckanext.ldap.auth.dn'):
         try:
             cnx.bind_s(config['ckanext.ldap.auth.dn'], config['ckanext.ldap.auth.password'])
         except ldap.SERVER_DOWN:
             log.error('LDAP server is not reachable')
             _send_ldap_error_mail('LDAP server is not reachable')
-            raise EnvironmentError('LDAP server is not reachable')
+            raise EnvironmentError({ 'LDAP server': 'is not reachable'})
             #return None
         except ldap.INVALID_CREDENTIALS:
             log.error('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
             _send_ldap_error_mail('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
-            raise EnvironmentError('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
+            raise EnvironmentError({ 'LDAP server': 'credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid'})
             #return None
 
     filter_str = config['ckanext.ldap.search.filter'].format(login=ldap.filter.escape_filter_chars(login))
     attributes = [config['ckanext.ldap.username']]
+    #print "*************2"
     if 'ckanext.ldap.fullname' in config:
         attributes.append(config['ckanext.ldap.fullname'])
     if 'ckanext.ldap.email' in config:
@@ -219,6 +236,8 @@ def _find_ldap_user(login):
             ret = _ldap_search(cnx, filter_str, attributes, non_unique='raise')
     finally:
         cnx.unbind()
+
+    #print ret
     return ret
 
 
@@ -236,6 +255,7 @@ def _ldap_search(cnx, filter_str, attributes, non_unique='raise'):
     @return: A dictionary defining 'cn', self.ldap_username and any other attributes that were defined
              in attributes; or None if no user was found.
     """
+    #print "*** ldap search"
     try:
         res = cnx.search_s(config['ckanext.ldap.base_dn'], ldap.SCOPE_SUBTREE, filterstr=filter_str, attrlist=attributes)
     except ldap.SERVER_DOWN:
@@ -250,6 +270,8 @@ def _ldap_search(cnx, filter_str, attributes, non_unique='raise'):
     except ldap.FILTER_ERROR:
         log.error('LDAP filter (ckanext.ldap.search) is malformed')
         return None
+    #print "*********** ldap search 2"
+    #print res
     if len(res) > 1:
         if non_unique == 'log':
             log.error('LDAP search.filter search returned more than one entry, ignoring. Fix the search to return only 1 or 0 results.')
@@ -310,8 +332,10 @@ def _send_ldap_error_mail(error):
     from os.path import basename
 
     ldap_user_dict = None
-    send_from = 'test@sandboxdc.ccca.ac.at'
+    send_from = 'test@data.ccca.ac.at'
+    #send_from = 'anja.stemme@ccca.ac.at'
     send_to = ['datenzentrum@ccca.ac.at']
+    #send_to = ['anja.stemme@ccca.ac.at']
     subject = 'ATTENTION: Potential LDAP Problem'
     text = error
 
