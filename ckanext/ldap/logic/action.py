@@ -20,7 +20,7 @@ from sqlalchemy import orm, types, Column, Table, ForeignKey
 from ckan.lib.helpers import flash_notice, flash_error
 from ckan.common import _, request
 from ckan.model.user import User
-from ckanext.ldap.plugin import config
+from pylons import config
 from ckanext.ldap.model.ldap_user import LdapUser
 from ckanext.ldap.controllers.user import _ldap_search
 from ckanext.ldap.controllers.user import _ckan_user_exists
@@ -137,6 +137,21 @@ def add_ckan_user(context,data_dict):
     # Check the users email adress and add it to the appropiate organization as Editor
     #print ldap_user_dict['email']
     user_org = _check_mail_org(ldap_user_dict['email'])
+
+    if not user_org:
+        # check ccca-extern
+        if 'ckanext.iauth.special_org' in config:
+            user_org = config.get( 'ckanext.iauth.special_org')
+            #print "************ 2"
+
+            #print user_org
+            # check if org exists
+            try:
+                check_org = tk.get_action('organization_show')(context, {'id':user_org})
+            except:
+                user_org = None
+                pass
+
     #print user_name
     if user_org:
         plugins.toolkit.get_action('member_create')(
