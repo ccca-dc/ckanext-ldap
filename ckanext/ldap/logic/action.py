@@ -217,7 +217,7 @@ def _check_mail_org(user_email):
     #print "leider nicht"
     return None
 
-def ldap_mail_org(context, email):
+def ldap_mail_org(context, data_dict):
     ccca_orgs= [u'aau', u'ages', u'ait', u'alps',
                 u'bayerische-akademie-der-wissenschaften',
                 u'bfw-bundesforschungszentrum-fur-wald', u'boku', u'ccca',
@@ -237,6 +237,7 @@ def ldap_mail_org(context, email):
                   u'wu.ac.at',u'zamg.ac.at', u'zsi.at']
 
     try:
+        email = data_dict.get('email')
         emailuser, domain = email.split('@')
         ind = next((i for i, s  in enumerate(ccca_mails) if s in domain),None)
         return ccca_orgs[ind]
