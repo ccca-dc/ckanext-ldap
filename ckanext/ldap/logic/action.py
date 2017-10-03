@@ -243,4 +243,6 @@ def ldap_mail_org(context, data_dict):
         return ccca_orgs[ind]
     except ValueError:
         raise Exception("Not a valid mail address")
+    except AttributeError:
+        raise Exception("Not a valid data dictionary attribute. You have to pass a dict with key email")
 
