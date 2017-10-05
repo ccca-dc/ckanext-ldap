@@ -236,13 +236,26 @@ def ldap_mail_org(context, data_dict):
                   u'uni-graz.at', u'wifo.ac.at', u'weatherpark.com',
                   u'wu.ac.at',u'zamg.ac.at', u'zsi.at']
 
+    user_org = None
+
     try:
         email = data_dict.get('email')
         emailuser, domain = email.split('@')
         ind = next((i for i, s  in enumerate(ccca_mails) if s in domain),None)
-        return ccca_orgs[ind]
+        user_org = ccca_orgs[ind]
     except ValueError:
         raise Exception("Not a valid mail address")
     except AttributeError:
         raise Exception("Not a valid data dictionary attribute. You have to pass a dict with key email")
+    except TypeError:
+        # check ccca-extern
+        if 'ckanext.iauth.special_org' in config:
+            user_org = config.get('ckanext.iauth.special_org')
+    
+    try:
+        check_org = tk.get_action('organization_show')(context, {'id':user_org})
+    except:
+        raise Exception("Organization does not exist")
 
+    return user_org
+        
