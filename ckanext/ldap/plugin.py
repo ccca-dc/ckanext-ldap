@@ -55,6 +55,16 @@ class LdapPlugin(p.SingletonPlugin):
         map.connect('/ldap_login_handler',
                     controller='ckanext.ldap.controllers.user:UserController',
                     action='login_handler')
+
+        map.connect('/user/reset/{id:.*}',
+                    controller='ckanext.ldap.controllers.user:UserController',
+                    action='perform_reset')
+
+        # Mail Request user registration
+        map.connect('/user/register',
+                    controller='ckanext.ldap.controllers.user:UserController',
+                    action='register')
+
         return map
 
     def get_auth_functions(self):
