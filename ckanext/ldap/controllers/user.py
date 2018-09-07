@@ -239,13 +239,21 @@ class UserController(p.toolkit.BaseController):
                 context['reset_password'] = True
                 new_password = self._get_form_password()
                 user_dict['password'] = new_password
-                user_dict['reset_key'] = c_reset_key
+                user_dict['reset_key'] = c.reset_key
                 user_dict['state'] = model.State.ACTIVE
-                user = get_action('user_update')(context, user_dict)
-                mailer.create_reset_key(user_obj)
 
-                h.flash_success(_("Your password has been reset."))
-                h.redirect_to('/')
+                # NEW: 7.9.18, ANJA - Change LDAP PAsswd
+                ldap_user_dict = _find_ldap_user(user_dict['name'])
+                ldap_user_dict['userPassword'] = user_dict['password']
+                ret = _change_ldap_user_passwd(ldap_user_dict)
+
+                # ORIGINAL:
+                #    user = get_action('user_update')(context, user_dict)
+                #    mailer.create_reset_key(user_obj)
+
+                if ret:
+                    h.flash_success(_("Your password has been reset."))
+                    h.redirect_to('/')
             except NotAuthorized:
                 h.flash_error(_('Unauthorized to edit user %s') % id)
             except NotFound, e:
@@ -443,6 +451,40 @@ def _get_or_create_ldap_user(ldap_user_dict):
             }
         )
     return user_name
+def _change_ldap_user_passwd(ldap_user_dict):
+    """ Set the Password of the user to the value given in 'userPassword'
+
+    @param ldap_user_dict: Ldap User Dict including 'cn' and 'userPassword'
+    @return: True if success False otherwise
+    """
+    #Bind as Admin
+    cnx = ldap.initialize(config['ckanext.ldap.uri'])
+
+    if config.get('ckanext.ldap.auth.dn'):
+        try:
+            cnx.bind_s(config['ckanext.ldap.auth.dn'], config['ckanext.ldap.auth.password'])
+        except ldap.SERVER_DOWN:
+            log.error('LDAP server is not reachable')
+            _send_ldap_error_mail('LDAP server is not reachable')
+            raise EnvironmentError({ 'LDAP server': 'is not reachable'})
+            #return None
+        except ldap.INVALID_CREDENTIALS:
+            log.error('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
+            _send_ldap_error_mail('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
+            raise EnvironmentError({ 'LDAP server': 'credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid'})
+            #return None
+
+    try:
+        dn = ldap_user_dict['cn']
+        cnx.passwd_s(dn, None,ldap_user_dict['userPassword'] )
+
+    except:
+        log.error('LDAP: Error changing password')
+        cnx.unbind()
+        return False
+
+    cnx.unbind()
+    return True
 
 
 def _find_ldap_user(login):
