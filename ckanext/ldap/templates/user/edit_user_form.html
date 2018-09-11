@@ -1,0 +1,65 @@
+{% import 'macros/form.html' as form %}
+
+{#} Adapted in order to hide critical fields which are currently not changeable, Anja 12.6.2017 {#}
+
+<form id="user-edit-form" class="dataset-form form-horizontal" method="post" action="{{ action }}">
+
+  {{ form.errors(error_summary) }}
+
+  <fieldset>
+    <legend>{{ _('Change details') }}</legend>
+
+    {{ form.input('fullname', label=_('Full name'), id='field-fullname', value=data.fullname, error=errors.fullname, placeholder=_('eg. Joe Bloggs'), classes=['control-medium'], attrs={"class": "form-control"}) }}
+
+    {{ form.markdown('about', label=_('About'), id='field-about', value=data.about, error=errors.about, placeholder=_('A little information about yourself'), attrs={"class": "form-control"}) }}
+
+    {% if c.show_email_notifications %}
+      {% call form.checkbox('activity_streams_email_notifications', label=_('Subscribe to notification emails'), id='field-activity-streams-email-notifications', value=True, checked=c.userobj.activity_streams_email_notifications) %}
+
+      {#}
+      {% set helper_text = _("You will receive notification emails once a months from {site_title}, when you have new activities on your dashboard."|string) %}
+      {{ form.info(helper_text.format(site_title=g.site_title), classes=['']) }}
+      {#}
+      (Upon subscription you will receive notification emails as monthly report from CCCA Data Server)
+
+      {% endcall %}
+
+    {% endif %}
+
+    {{ form.hidden('name', value=data.name) }}
+
+    {{ form.hidden('email', value=data.email, ) }}
+
+
+  </fieldset>
+
+
+      {{ form.hidden('old_password',  value=data.oldpassword) }}
+
+      {{ form.hidden('password1',   value=data.password1) }}
+
+      {{ form.hidden('password2', value=data.password2) }}
+
+
+      <p>{{ _('Please contact us if you need to change any other user specific details:') }}
+          {{h.mail_to(_('datenzentrum@ccca.ac.at'),_('datenzentrum@ccca.ac.at'), None,None,
+          _('User ')+c.user_name|string+_('  needs to change details'), _('Please describe your requirments:'), class='mdedit_dz_mail_to')}}
+      </p>
+
+
+  <div class="form-actions">
+    {% block delete_button %}
+      {% if h.check_access('user_delete', {'id': data.id})  %}
+        {% set locale = h.dump_json({'content': _('Are you sure you want to delete this User?')}) %}
+        <a class="btn btn-danger pull-left" href="{% url_for controller='user', action='delete', id=data.id %}" data-module="confirm-action" data-module-i18n="{{ locale }}">{% block delete_button_text %}{{ _('Delete') }}{% endblock %}</a>
+      {% endif %}
+    {% endblock %}
+    {% block generate_button %}
+      {% if h.check_access('user_generate_apikey', {'id': data.id})  %}
+        {% set locale = h.dump_json({'content': _('Are you sure you want to regenerate the API key?')}) %}
+        <a class="btn btn-warning" href="{% url_for controller='user', action='generate_apikey', id=data.id %}" data-module="confirm-action" data-module-i18n="{{ locale }}">{% block generate_button_text %}{{ _('Regenerate API Key') }}{% endblock %}</a>
+      {% endif %}
+    {% endblock %}
+    <button class="btn btn-primary" type="submit" name="save">{{ _('Update Profile') }}</button>
+  </div>
+</form>

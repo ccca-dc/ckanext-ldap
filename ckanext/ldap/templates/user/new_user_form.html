@@ -1,0 +1,31 @@
+{% import "macros/form.html" as form %}
+
+<form id="user-register-form" class="form-horizontal" action="" method="post">
+  {{ form.errors(error_summary) }}
+  {{ form.input("name", id="field-username", label=_("Username"), placeholder=_("username"), value=data.name, error=errors.name, classes=["control-medium"], attrs={"class": "form-control"}) }}
+  {{ form.input("fullname", id="field-fullname", label=_("Full Name"), placeholder=_("Joe Bloggs"), value=data.fullname, error=errors.fullname, classes=["control-medium"], attrs={"class": "form-control"}) }}
+  {{ form.input("email", id="field-email", label=_("Email"), type="email", placeholder=_("joe@example.com"), value=data.email, error=errors.email, classes=["control-medium"], attrs={"class": "form-control"}) }}
+  {{ form.input("password1", id="field-password", label=_("Password"), type="password", placeholder="••••••••", value=data.password1, error=errors.password1, classes=["control-medium"], attrs={"class": "form-control"}) }}
+  {{ form.input("password2", id="field-confirm-password", label=_("Confirm"), type="password", placeholder="••••••••", value=data.password2, error=errors.password1, classes=["control-medium"], attrs={"class": "form-control"}) }}
+
+  {% if g.recaptcha_publickey %}
+    {% snippet "user/snippets/recaptcha.html", public_key=g.recaptcha_publickey %}
+  {% endif %}
+  
+  <h2>Additional Information:</h2>
+      <div style="width: 80%">
+      <span class="info-block">
+        <i class="icon-info-sign"></i> {% trans %} If you want to use a
+        restricted secure shell for downloading and uploading your data (sftp,
+        rsync, scp) please add your public ssh key. {% endtrans %}
+      </span>
+      </div>
+      {{ form.textarea("sshkey", id="field-ssh-key", label=_("SSH Public Key"), placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q== joe@example.com", value=data.sshkey, error=errors.sshkey, classes=["control-medium"], is_required=false, rows=4, attrs={"class": "form-control"}) }}
+
+
+  <div class="form-actions">
+    {% block form_actions %}
+    <button class="btn btn-primary" type="submit" name="save">{{ _("Send Account Request") }}</button>
+    {% endblock %}
+  </div>
+</form>

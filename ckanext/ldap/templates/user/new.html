@@ -1,0 +1,35 @@
+{% ckan_extends %}
+
+{% set org_link = h.url_for(controller='organization', action='index', sort='name asc')  %}
+{% set policy_link = h.url_for(controller='ckanext.ccca.controllers.about:AboutController', action='data_policy')  %}
+
+  {% block help %}
+  <section class="module module-narrow module-shallow">
+    {% block help_inner %}
+    <h2 class="module-heading">{{ _('Why register for the CCCA Data Centre Server?') }}</h2>
+    <div class="module-content">
+      <p>{% trans %}
+        <br>
+       A registered user is able to view and download all resources on our server or create citeable  subsets.
+       <br>
+       <br>
+       Please respect and consider the given Licenses and our <a href="{{ policy_link }}">CCCA Data Policy</a> !
+       <br>
+       <br>
+        Furthermore, users associated with one of the <a href="{{ org_link }}">CCCA  organizations</a>
+        are able to create and manage datasets and upload their own resources.
+        <br>
+        <br>
+
+          Please note that it is necessary to use a comprehensible email address for the registration (i.e. non-anonymous).
+        <br>        <br>
+        The user registration is free of charge.
+        <br>
+        <br>
+
+
+        {% endtrans %}</p>
+    </div>
+    {% endblock %}
+  </section>
+  {% endblock %}
