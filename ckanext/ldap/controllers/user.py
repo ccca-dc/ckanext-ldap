@@ -17,7 +17,6 @@ import ckan.logic as logic
 ValidationError = logic.ValidationError
 #Anja, 5.9.18 for password reset
 check_access = logic.check_access
-get_action = logic.get_action
 NotFound = logic.NotFound
 NotAuthorized = logic.NotAuthorized
 UsernamePasswordError = logic.UsernamePasswordError
@@ -26,6 +25,7 @@ from ckan.common import _, c, g, request, response
 import ckan.lib.mailer as mailer
 import ckan.lib.base as base
 render = base.render
+abort = base.abort
 #Anja, 5.9.18 for password reset END
 
 #Anja, 5.9.18 - move register and lgin from ccca plugin to ldapPublicKey
@@ -58,6 +58,39 @@ class UserController(p.toolkit.BaseController):
 
     new_user_form = 'user/new_user_form.html'
     new_user_reply = 'user/new_user_reply.html'
+
+    def delete(self, id):
+        '''Delete user with id passed as parameter'''
+        context = {'model': model,
+                   'session': model.Session,
+                   'user': c.user,
+                   'auth_user_obj': c.userobj}
+        data_dict = {'id': id}
+
+        try:
+            user_dict = p.toolkit.get_action('user_show')(context, data_dict)
+
+            user_obj = context['user_obj']
+        except NotFound, e:
+            abort(404, _('User not found'))
+
+        try:
+            ldap_user_dict = _find_ldap_user(user_dict['name'])
+        except NotFound, e:
+            abort(404, _('LDAP User not found'))
+
+        try:
+            p.toolkit.get_action('user_delete')(context, data_dict)
+        except NotAuthorized:
+            msg = _('Unauthorized to delete user with id "{user_id}".')
+            abort(403, msg.format(user_id=id))
+        try:
+            if _delete_ldap_user(ldap_user_dict):
+                user_index = h.url_for(controller='user', action='index')
+                h.redirect_to(user_index)
+        except:
+            msg = _('Unable to delete LDAP User user with id "{user_id}".')
+            abort(403, msg.format(user_id=id))
 
     def _new_form_to_db_schema(self):
         return schema.user_new_form_schema()
@@ -134,7 +167,7 @@ class UserController(p.toolkit.BaseController):
 
             #print "HEre we are"
             # ATTENTION: This action requires that userlist is available for anon users!
-            u_list = get_action('user_list')({},{"order_by": "email"})
+            u_list = p.toolkit.get_action('user_list')({},{"order_by": "email"})
 
             #print "HEre we are 2"
 
@@ -143,7 +176,7 @@ class UserController(p.toolkit.BaseController):
             #print otto.email_hash
             for x in u_list:
                 if x['email_hash'] == otto.email_hash:
-                    error_msg = _(u'Error: Email Address already registered: ' + new_mail + '.  If you are insecure about this message please contact us: datanzentrum@ccca.ac.at')
+                    error_msg = _(u'Error: Email Address already registered: ' + new_mail + '.  If you are insecure about this message please contact us: datenzentrum@ccca.ac.at')
                     h.flash_error(error_msg)
                     return self.new_mail_request(data_dict)
 
@@ -223,7 +256,7 @@ class UserController(p.toolkit.BaseController):
 
         try:
             data_dict = {'id': id}
-            user_dict = get_action('user_show')(context, data_dict)
+            user_dict = p.toolkit.get_action('user_show')(context, data_dict)
 
             user_obj = context['user_obj']
         except NotFound, e:
@@ -234,6 +267,7 @@ class UserController(p.toolkit.BaseController):
             h.flash_error(_('Invalid reset key. Please try again.'))
             abort(403)
 
+        # After the user klicked "submit" - request.method = POST!
         if request.method == 'POST':
             try:
                 context['reset_password'] = True
@@ -244,16 +278,26 @@ class UserController(p.toolkit.BaseController):
 
                 # NEW: 7.9.18, ANJA - Change LDAP PAsswd
                 ldap_user_dict = _find_ldap_user(user_dict['name'])
-                ldap_user_dict['userPassword'] = user_dict['password']
-                ret = _change_ldap_user_passwd(ldap_user_dict)
-
+                if ldap_user_dict:
+                    ldap_user_dict['userPassword'] = user_dict['password']
+                    ret = _change_ldap_user_passwd(ldap_user_dict)
+                else:
+                    h.flash_error(_('LDAP User not found'))
                 # ORIGINAL:
                 #    user = get_action('user_update')(context, user_dict)
                 #    mailer.create_reset_key(user_obj)
 
                 if ret:
+                    # Inform us about reset
+                    send_from = 'password_reset@data.ccca.ac.at'
+                    send_to = ['datenzentrum@ccca.ac.at']
+                    subject = 'Passwort Reset: ' + user_dict['name']
+                    text = 'User ' + user_dict['name'] +  ' performed a password reset'
+                    _send_mail(send_from, send_to, subject, text)
                     h.flash_success(_("Your password has been reset."))
                     h.redirect_to('/')
+
+
             except NotAuthorized:
                 h.flash_error(_('Unauthorized to edit user %s') % id)
             except NotFound, e:
@@ -451,6 +495,7 @@ def _get_or_create_ldap_user(ldap_user_dict):
             }
         )
     return user_name
+
 def _change_ldap_user_passwd(ldap_user_dict):
     """ Set the Password of the user to the value given in 'userPassword'
 
@@ -480,6 +525,37 @@ def _change_ldap_user_passwd(ldap_user_dict):
 
     except:
         log.error('LDAP: Error changing password')
+        cnx.unbind()
+        return False
+
+    cnx.unbind()
+    return True
+
+def _delete_ldap_user(ldap_user_dict):
+
+    #Bind as Admin
+    cnx = ldap.initialize(config['ckanext.ldap.uri'])
+
+    if config.get('ckanext.ldap.auth.dn'):
+        try:
+            cnx.bind_s(config['ckanext.ldap.auth.dn'], config['ckanext.ldap.auth.password'])
+        except ldap.SERVER_DOWN:
+            log.error('LDAP server is not reachable')
+            _send_ldap_error_mail('LDAP server is not reachable')
+            raise EnvironmentError({ 'LDAP server': 'is not reachable'})
+            #return None
+        except ldap.INVALID_CREDENTIALS:
+            log.error('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
+            _send_ldap_error_mail('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
+            raise EnvironmentError({ 'LDAP server': 'credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid'})
+            #return None
+
+    try:
+        dn = ldap_user_dict['cn']
+        cnx.delete_s(dn)
+
+    except:
+        log.error('LDAP: Error Deleting User: ' + str(dn) )
         cnx.unbind()
         return False
 

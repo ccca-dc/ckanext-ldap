@@ -65,6 +65,11 @@ class LdapPlugin(p.SingletonPlugin):
                     controller='ckanext.ldap.controllers.user:UserController',
                     action='register')
 
+        # Anja, 12.9.18 Delete user
+        map.connect('user_delete', '/user/delete/{id}',
+                   controller='ckanext.ldap.controllers.user:UserController',
+                   action='delete')
+
         return map
 
     def get_auth_functions(self):
