@@ -8,6 +8,8 @@ from ckanext.ldap.logic.auth.update import user_update
 from ckanext.ldap.logic.auth.create import user_create
 from ckanext.ldap.model.ldap_user import setup as model_setup
 from ckanext.ldap.lib.helpers import is_ldap_user
+from ckanext.ldap.lib.helpers import check_mail_org
+
 
 import ckanext.ldap.logic.action as action
 
@@ -36,6 +38,7 @@ class LdapPlugin(p.SingletonPlugin):
     #IActions: Add User via Curl
     def get_actions(self):
         actions = {'add_ckan_user': action.add_ckan_user,
+                   'add_ckan_user_auto_register': action.add_ckan_user_auto_register,
                    'ldap_check_api_create': action.ldap_check_api_create,
                    'ldap_mail_org': action.ldap_mail_org}
         return actions
@@ -69,6 +72,11 @@ class LdapPlugin(p.SingletonPlugin):
         map.connect('user_delete', '/user/delete/{id}',
                    controller='ckanext.ldap.controllers.user:UserController',
                    action='delete')
+
+        #Anja, 25.9.2018 Confirm Mail Adress Auto Register
+        map.connect('/confirm_mail/{id:.*}',
+                    controller='ckanext.ldap.controllers.user:UserController',
+                    action='confirm_mail')
 
         return map
 
@@ -166,7 +174,8 @@ class LdapPlugin(p.SingletonPlugin):
 
     def get_helpers(self):
         return {
-            'is_ldap_user': is_ldap_user
+            'is_ldap_user': is_ldap_user,
+            'check_mail_org' : check_mail_org
         }
 
 
