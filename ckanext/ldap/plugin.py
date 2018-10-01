@@ -9,6 +9,7 @@ from ckanext.ldap.logic.auth.create import user_create
 from ckanext.ldap.model.ldap_user import setup as model_setup
 from ckanext.ldap.lib.helpers import is_ldap_user
 from ckanext.ldap.lib.helpers import check_mail_org
+from ckanext.ldap.lib.helpers import check_user_datasets
 
 
 import ckanext.ldap.logic.action as action
@@ -37,8 +38,7 @@ class LdapPlugin(p.SingletonPlugin):
 
     #IActions: Add User via Curl
     def get_actions(self):
-        actions = {'add_ckan_user': action.add_ckan_user,
-                   'add_ckan_user_auto_register': action.add_ckan_user_auto_register,
+        actions = {'add_ckan_user': action.add_ckan_user,                  
                    'ldap_check_api_create': action.ldap_check_api_create,
                    'ldap_mail_org': action.ldap_mail_org}
         return actions
@@ -175,7 +175,8 @@ class LdapPlugin(p.SingletonPlugin):
     def get_helpers(self):
         return {
             'is_ldap_user': is_ldap_user,
-            'check_mail_org' : check_mail_org
+            'check_mail_org' : check_mail_org,
+            'check_user_datasets' : check_user_datasets
         }
 
 

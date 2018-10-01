@@ -11,6 +11,28 @@ import ldap, ldap.filter
 import ckan.model as model
 from pylons import config
 
+import ckan.plugins as p
+import ckan.logic as logic
+ValidationError = logic.ValidationError
+NotFound = logic.NotFound
+
+def check_user_datasets (user_name):
+
+    #print "****** User name"
+    #print user_name
+    data_dict = {'id': user_name, 'include_datasets':True}
+
+    try:
+        user_dict = p.toolkit.get_action('user_show')({}, data_dict)
+    except:
+        return True # Should not happen but Will be checked later anyway
+
+    #Check if the user has datasets
+    if len(user_dict['datasets']) > 0:
+            return True
+    else:
+        return False
+
 def check_mail_org(user_email):
     ccca_orgs= [u'mul', u'seri', u'ages', u'ait', u'alps', u'bayerische-akademie-der-wissenschaften', u'bfw-bundesforschungszentrum-fur-wald', u'boku', u'ccca', u'donau-uni',u'essl', u'gba', u'iiasa', u'iio', u'jr', u'oaw', u'ogm', u'tu-graz', u'tu-wien',  u'uibk', u'uni-salzburg', u'uni-wien', u'vetmeduni', u'uni-graz', u'wifo', u'wp', u'wu', u'zamg', u'zsi']
     ccca_mails = [u'unileoben.ac.at', u'seri.at', u'ages.at',u'ait.ac.at',u'alps-gmbh.com',u'badw.de',u'bfw.gv.at',u'boku.ac.at', u'ccca.ac.at', u'donau-uni.ac.at', u'essl.org',u'geologie.ac.at',u'iiasa.ac.at',u'indoek.at',u'joanneum.at', u'oeaw.ac.at', u'meteorologie.at', u'tugraz.at', u'tuwien.ac.at',u'uibk.ac.at',u'sbg.ac.at', u'univie.ac.at',u'vetmeduni.ac.at', u'uni-graz.at', u'wifo.ac.at', u'weatherpark.com', u'wu.ac.at',u'zamg.ac.at', u'zsi.at']
