@@ -87,9 +87,8 @@ class UserController(p.toolkit.BaseController):
                 else:
                     try:
                         p.toolkit.get_action('dataset_purge')(context, {'id':x['name']})
-                    except e:
+                    except:
                         print "Error purging: " +  x['name']
-                        print e
                         msg = _('Error deleting "{pkg_id}": "{error_message}"')
                         h.flash_error( msg.format(pkg_id=x['name'], error_message=e))
 
@@ -793,11 +792,11 @@ def _add_ldap_and_ckan_user(context, data_dict):
         #print entry_user
         #print _find_ldap_user(user_name)
         result = cnx.add_s(dn_user, ldap.modlist.addModlist(entry_user))
-    except e:
-        log.error('Error creating LDAP User:' + str(ckan_user[name]) + str (e))
-        _send_ldap_error_mail('Error creating LDAP User: ' + str (e))
+    except:
+        log.error('Error creating LDAP User:' + str(data_dict['name']))
+        _send_ldap_error_mail('Error creating LDAP User: ' + str(data_dict['name']))
         cnx.unbind()
-        return none
+        return None
 
     #print result
 
@@ -810,11 +809,11 @@ def _add_ldap_and_ckan_user(context, data_dict):
                        'memberUid': [data_dict['name']]}
         result = cnx.add_s(dn_group, ldap.modlist.addModlist(entry_group))
 
-    except e:
-        log.error('Error creating LDAP User Group:' + str(ckan_user[name]) + str (e))
-        _send_ldap_error_mail('Error creating LDAP User Group: ' + str (e))
+    except:
+        log.error('Error creating LDAP User Group:' + str(data_dict['name']))
+        _send_ldap_error_mail('Error creating LDAP User Group: ' + str(data_dict['name']))
         cnx.unbind()
-        return none
+        return None
 
     # Add user to general user group
     try:
@@ -822,11 +821,11 @@ def _add_ldap_and_ckan_user(context, data_dict):
         entry_group_users = [(ldap.MOD_ADD,'memberUid',[data_dict['name']])]
         #result = cnx.modify_s(dn_group_users, ldap.modlist.addModlist(entry_group_users))
         result = cnx.modify_s(dn_group_users, entry_group_users)
-    except e:
-        log.error('Error adding LDAP User to General User Group: '  + str (e))
-        _send_ldap_error_mail('Error adding LDAP User to General User Group: ' + str (e))
+    except:
+        log.error('Error adding LDAP User to General User Group: '  + str(data_dict['name']))
+        _send_ldap_error_mail('Error adding LDAP User to General User Group: ' + str(data_dict['name']))
         cnx.unbind()
-        return none
+        return None
     cnx.unbind()
 
     #########################################################
@@ -838,10 +837,10 @@ def _add_ldap_and_ckan_user(context, data_dict):
 
     try:
         ckan_user = p.toolkit.get_action('user_create')(context=context, data_dict=data_dict)
-    except e:
-        log.error('Error creating CKAN USER: '  + str (e))
-        _send_ldap_error_mail('Error creating CKAN USER: ' + str (e))
-        return none
+    except:
+        log.error('Error creating CKAN USER: '  + data_dict['name'])
+        _send_ldap_error_mail('Error creating CKAN USER: ' + data_dict['name'])
+        return None
 
     #print "Hello2"
     #print ckan_user
@@ -895,10 +894,10 @@ def _add_ldap_and_ckan_user(context, data_dict):
         ldap_user = LdapUser(user_id=ckan_user['id'], ldap_id = ldap_user_dict['username'])
         ckan.model.Session.add(ldap_user)
         ckan.model.Session.commit()
-    except e:
+    except:
         log.error('Error adding user to CKAN LdapUser Table:' + str(ckan_user[name]) + str (e))
         _send_ldap_error_mail('Error adding user to CKAN LDAP User Table:' + str(ckan_user[name]) + str (e))
-        return none
+        return None
 
     return ckan_user
 # Ende Auto
@@ -1246,10 +1245,12 @@ def _send_ldap_error_mail(error):
     msg['Subject'] = subject
 
     msg.attach(MIMEText(text))
-
-    smtp = smtplib.SMTP(config.get('smtp.server'))
-    smtp.sendmail(send_from, send_to, msg.as_string())
-    smtp.quit()
+    try:
+        smtp = smtplib.SMTP(config.get('smtp.server'))
+        smtp.sendmail(send_from, send_to, msg.as_string())
+        smtp.quit()
+    except:
+        pass
 
 
 
