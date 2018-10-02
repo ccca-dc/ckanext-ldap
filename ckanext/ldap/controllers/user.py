@@ -64,19 +64,69 @@ class UserController(p.toolkit.BaseController):
     new_user_reply = 'user/new_user_reply.html'
 
     def delete(self, id):
-        '''Delete user with id passed as parameter'''
+        '''
+        Delete user with id passed as parameter
+
+        Delete first all LDAP entries and last delete
+        and purge CKAN user. Thus the delete method is
+        still available even if some Ldap deletes failed
+        i.e. because of server down or similar
+        '''
+
         context = {'model': model,
                    'session': model.Session,
                    'user': c.user,
                    'auth_user_obj': c.userobj}
         data_dict = {'id': id, 'include_datasets':True} #Check if user has public datasets
 
+        # Store whether there were errors
+        some_errors = False
+
+        # Get User dict
         try:
             user_dict = p.toolkit.get_action('user_show')(context, data_dict)
 
             user_obj = context['user_obj']
-        except NotFound, e: # Do not abort because maybe the other entries exist
-            h.flash_error(_('User not found. Please contact datenzentrum@ccca.ac.at.'))
+
+        except NotFound, e:
+            msg = _('User not found. "{user_id}". Please contact datenzentrum@ccca.ac.at.')
+            abort(403, msg.format(user_id=id))
+
+        # Get LDAP User dict
+        try:
+            ldap_user_dict = _find_ldap_user(user_dict['name'])
+        except NotFound, e:
+            some_errors = True
+            log.error('LDAP User not found.')
+            h.flash_error(_('LDAP User not found. Please check the log files'))
+
+        if not ldap_user_dict:
+            some_errors = True
+            h.flash_error( _('The LDAP User not found. Please check the log files.'))
+
+        # Delete LDAP Entries
+        try:
+            if ldap_user_dict and _delete_ldap_user(ldap_user_dict):
+                user_index = h.url_for(controller='user', action='index')
+            else:
+                msg = _('Unable to delete the LDAP User with name "{user_id}". Please check log files for further details.')
+                h.flash_error( msg.format(user_id=user_dict['name']))
+
+        except:
+            some_errors = True
+            msg = _('Unable to delete LDAP User with name "{user_id}".  Please check the log files.')
+            h.flash_error( msg.format(user_id=user_dict['name']))
+
+        # Remove LdapUser entry = Database entry with match ckan_id - ldap_id
+        try:
+            ldap_user = LdapUser.by_user_id(user_dict['id'])
+
+            if ldap_user:
+                ckan.model.Session.delete(ldap_user)
+                ckan.model.Session.commit()
+        except:
+            some_errors = True
+            h.flash_error(_(' Unable to remove ldap table entry.  Please check the log files.'))
 
         #Check if the user has datasets
         if len(user_dict['datasets']) > 0:
@@ -88,51 +138,36 @@ class UserController(p.toolkit.BaseController):
                     try:
                         p.toolkit.get_action('dataset_purge')(context, {'id':x['name']})
                     except:
-                        print "Error purging: " +  x['name']
+                        some_errors = True
+                        log.error ("Error purging: " +  x['name'])
                         msg = _('Error deleting "{pkg_id}": "{error_message}"')
                         h.flash_error( msg.format(pkg_id=x['name'], error_message=e))
 
-        try:
-            ldap_user_dict = _find_ldap_user(user_dict['name'])
-        except NotFound, e:
-            h.flash_error(_('LDAP User not found. Please contact datenzentrum@ccca.ac.at.'))
 
-        if not ldap_user_dict:
-            h.flash_error( _('The LDAP User not found. Please contact datenzentrum@ccca.ac.at.'))
-
+        # Delete CKAN USER
         try:
             p.toolkit.get_action('user_delete')(context, data_dict)
         except NotAuthorized:
-            msg = _('Unauthorized to delete user with id "{user_id}". Please contact datenzentrum@ccca.ac.at.')
+            some_errors = True
+            msg = _('Unauthorized to delete user with id "{user_id}". Please check the log files.')
             abort(403, msg.format(user_id=id))
-        try:
-            if ldap_user_dict and _delete_ldap_user(ldap_user_dict):
-                user_index = h.url_for(controller='user', action='index')
-            else:
-                msg = _('CKAN User deleted. BUT: Unable to delete the LDAP User user with name "{user_id}". Please check log files for further details.')
-                h.flash_error( msg.format(user_id=ldap_user_dict['username']))
 
-        except:
-            msg = _('CKAN User deleted. BUT: Unable to delete LDAP User user with name "{user_id}".  Please contact datenzentrum@ccca.ac.at.')
-            h.flash_error( msg.format(user_id=ldap_user_dict['username']))
-
-
-        # Purge user
+        # Purge CKAN user
         try:
             ckan.model.User.get(user_dict['name']).purge()
             ckan.model.Session.commit()
-            # Remove LdapUser entry = Database entry with match ckan_id - ldap_id
-            ldap_user = LdapUser.by_user_id(user_dict['id'])
-            #print "**************ldap_user: "
-            #print ldap_user
-            if ldap_user:
-                ckan.model.Session.delete(ldap_user)
-                ckan.model.Session.commit()
         except:
-            h.flash_error(_(' Unable to remove ldap table entry.  Please contact datenzentrum@ccca.ac.at.'))
+            some_errors = True
+            h.flash_error(_(' Unable to purge CKAN User.  Please check the log files.'))
 
-        h.flash_success('User ' + user_dict['name'] + ' successfully deleted.')
-        h.redirect_to(user_index)
+        user_index = h.url_for(controller='user', action='index')
+
+        if not some_errors:
+            h.flash_success('User ' + user_dict['name'] + ' successfully deleted.')
+            h.redirect_to(user_index)
+        else:
+            h.flash_error ('User ' + user_dict['name'] + ' not entirely deleted. Please check the Log Files')
+            h.redirect_to(user_index)
 
     def _new_form_to_db_schema(self):
         return schema.user_new_form_schema()
@@ -171,7 +206,7 @@ class UserController(p.toolkit.BaseController):
                    'save': 'save' in request.params}
 
         try:
-            check_access('user_create', context)
+            result = check_access('user_create', context)
         except NotAuthorized:
             abort(403, _('Unauthorized to create a user'))
 
@@ -193,7 +228,6 @@ class UserController(p.toolkit.BaseController):
 
 
     def _request_auto_user(self, context):
-        #print "***********++++ request_auto"
 
         try:
             data_dict = logic.clean_dict(unflatten(
@@ -222,17 +256,14 @@ class UserController(p.toolkit.BaseController):
                 error_msg = _(u'Please insert a username.')
                 h.flash_error(error_msg)
                 return self._auto_register_request(data_dict)
-            #print new_mail
             if new_mail == u'':
                 error_msg = _(u'Please insert a valid mail address.')
                 h.flash_error(error_msg)
                 return self._auto_register_request(data_dict)
 
-            #print "HEre we are"
             # ATTENTION: This action requires that userlist is available for anon users!
             u_list = p.toolkit.get_action('user_list')({},{"order_by": "email"})
 
-            #print "HEre we are 2"
 
             # need to access the ckan email_hash
             otto = model.User(email=new_mail)
@@ -255,9 +286,8 @@ class UserController(p.toolkit.BaseController):
                 return self._auto_register_request(data_dict)
             # Actual add End
 
-
         except NotAuthorized, e:
-            print (e)
+            log.error (e)
             error_msg = _(u'Username already exists, use another one.')
             h.flash_error(error_msg)
             return self._auto_register_request(data_dict)
@@ -410,7 +440,7 @@ class UserController(p.toolkit.BaseController):
             _send_mail(send_from, send_to, subject, text)
 
         except NotAuthorized, e:
-            print (e)
+            log.error (e)
             error_msg = _(u'Username already exists, use another one.')
             h.flash_error(error_msg)
             return self.new_mail_request(data_dict)
@@ -726,12 +756,15 @@ def _add_ldap_and_ckan_user(context, data_dict):
     #schema = context.get('schema') or logic.schema.user_new_form_schema()
     session = context['session']
 
-    check_access('user_create', context, data_dict)
+    try:
+        r = check_access('user_create', context, data_dict)
+        print "check_access " + str(r)
+    except:
+        session.rollback()
+        raise ValidationError('Unauthorized to create a user')
 
-    user_name = _get_unique_user_name(data_dict['name'])
+    user_name = _get_unique_user_name_check_ldap(data_dict['name'])
     data_dict['name'] = user_name
-    #print "***********ckanext-ldap"
-    #print user_name
 
     data, errors = _validate(data_dict, schema, context)
 
@@ -759,33 +792,33 @@ def _add_ldap_and_ckan_user(context, data_dict):
         except ldap.SERVER_DOWN:
             log.error('LDAP server is not reachable')
             _send_ldap_error_mail('LDAP server is not reachable')
-            return False
+            return None
         except ldap.INVALID_CREDENTIALS:
             log.error('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
             _send_ldap_error_mail('LDAP server credentials (ckanext.ldap.auth.dn and ckanext.ldap.auth.password) invalid')
-            return False
+            return None
 
     hash_password = _make_secret(data_dict['password1'])
 
-    data_dict = dict((k, v.encode('utf-8')) for (k, v) in data_dict.items())
+    ldap_data_dict = dict((k, v.encode('utf-8')) for (k, v) in data_dict.items())
 
     # Create ldap user
     try:
         entry_user = {'objectClass': ['top', 'person', 'organizationalPerson',
                                       'inetOrgPerson', 'posixAccount', 'shadowAccount',
                                       'ldapPublicKey'],
-                      'uid': [data_dict['name']],
-                      'cn': [data_dict['fullname']],
-                      'sn': [data_dict['fullname'].split()[-1]] if data_dict['fullname'] else [''],
-                      'givenName': [' '.join(data_dict['fullname'].split()[:-1])],
-                      'mail': [data_dict['email']],
+                      'uid': [ldap_data_dict['name']],
+                      'cn': [ldap_data_dict['fullname']],
+                      'sn': [ldap_data_dict['fullname'].split()[-1]] if ldap_data_dict['fullname'] else [''],
+                      'givenName': [' '.join(ldap_data_dict['fullname'].split()[:-1])],
+                      'mail': [ldap_data_dict['email']],
                       'userPassword': [hash_password],
                       'loginShell': ['/usr/bin/mysecureshell'],
                       'uidNumber': [uid],
                       'gidNumber': [gid],
-                      'homeDirectory': ['/e/user/home/' + data_dict['name']],
-                      'sshPublicKey': [data_dict['sshkey']]}
-        dn_user = 'uid='+str(data_dict['name'])+',ou=people,dc=ldap,dc=ccca,dc=ac,dc=at'
+                      'homeDirectory': ['/e/user/home/' + ldap_data_dict['name']],
+                      'sshPublicKey': [ldap_data_dict['sshkey']]}
+        dn_user = 'uid='+str(ldap_data_dict['name'])+',ou=people,dc=ldap,dc=ccca,dc=ac,dc=at'
 
         #test = ldap.modlist.addModlist(entry_user)
         #print test
@@ -793,8 +826,8 @@ def _add_ldap_and_ckan_user(context, data_dict):
         #print _find_ldap_user(user_name)
         result = cnx.add_s(dn_user, ldap.modlist.addModlist(entry_user))
     except:
-        log.error('Error creating LDAP User:' + str(data_dict['name']))
-        _send_ldap_error_mail('Error creating LDAP User: ' + str(data_dict['name']))
+        log.error('Error creating LDAP User:' + str(ldap_data_dict['name']))
+        _send_ldap_error_mail('Error creating LDAP User: ' + str(ldap_data_dict['name']))
         cnx.unbind()
         return None
 
@@ -802,36 +835,42 @@ def _add_ldap_and_ckan_user(context, data_dict):
 
     # Create LDAP user group
     try:
-        dn_group = 'cn='+str(data_dict['name'])+',ou=groups,dc=ldap,dc=ccca,dc=ac,dc=at'
+        dn_group = 'cn='+str(ldap_data_dict['name'])+',ou=groups,dc=ldap,dc=ccca,dc=ac,dc=at'
         entry_group = {'objectClass': ['posixGroup'],
-                       'cn': [data_dict['name']],
+                       'cn': [ldap_data_dict['name']],
                        'gidNumber': [gid],
-                       'memberUid': [data_dict['name']]}
+                       'memberUid': [ldap_data_dict['name']]}
         result = cnx.add_s(dn_group, ldap.modlist.addModlist(entry_group))
 
     except:
-        log.error('Error creating LDAP User Group:' + str(data_dict['name']))
-        _send_ldap_error_mail('Error creating LDAP User Group: ' + str(data_dict['name']))
+        log.error('Error creating LDAP User Group:' + str(ldap_data_dict['name']))
+        _send_ldap_error_mail('Error creating LDAP User Group: ' + str(ldap_data_dict['name']))
         cnx.unbind()
         return None
 
     # Add user to general user group
     try:
         dn_group_users = 'cn=users,ou=groups,dc=ldap,dc=ccca,dc=ac,dc=at'
-        entry_group_users = [(ldap.MOD_ADD,'memberUid',[data_dict['name']])]
+        entry_group_users = [(ldap.MOD_ADD,'memberUid',[ldap_data_dict['name']])]
         #result = cnx.modify_s(dn_group_users, ldap.modlist.addModlist(entry_group_users))
         result = cnx.modify_s(dn_group_users, entry_group_users)
     except:
-        log.error('Error adding LDAP User to General User Group: '  + str(data_dict['name']))
-        _send_ldap_error_mail('Error adding LDAP User to General User Group: ' + str(data_dict['name']))
+        log.error('Error adding LDAP User to General User Group: '  + str(ldap_data_dict['name']))
+        _send_ldap_error_mail('Error adding LDAP User to General User Group: ' + str(ldap_data_dict['name']))
         cnx.unbind()
         return None
+
     cnx.unbind()
 
     #########################################################
     # Now CKAN
     # Store ldap dict
-    ldap_user_dict = _find_ldap_user(data_dict['name'])
+    try:
+        ldap_user_dict = _find_ldap_user(data_dict['name'])
+    except NotFound, e:
+        log.error('LDAP User not found:' + str(data_dict['name']))
+        h.flash_error(_('LDAP User not found. Please contact datenzentrum@ccca.ac.at.'))
+        return None
 
     data_dict['state'] = 'waiting'
 
@@ -840,21 +879,44 @@ def _add_ldap_and_ckan_user(context, data_dict):
     except:
         log.error('Error creating CKAN USER: '  + data_dict['name'])
         _send_ldap_error_mail('Error creating CKAN USER: ' + data_dict['name'])
+
+        # try and remove ldap user again
+        try:
+            if ldap_user_dict:
+                _delete_ldap_user(ldap_user_dict)
+                log.error('LDAP User deleted because of errors creating CKAN user '  + data_dict['name'])
+        except:
+                log.error('Error removing LDAP User: '  + data_dict['name'])
+
         return None
 
-    #print "Hello2"
-    #print ckan_user
+    # Add LdapUser entry = Database entry with match ckan_id - ldap_id
+    # FIXME: Break/rollback if it does not work?
+    try:
+        ldap_user = LdapUser(user_id=ckan_user['id'], ldap_id = ldap_user_dict['username'])
+        ckan.model.Session.add(ldap_user)
+        ckan.model.Session.commit()
+    except:
+        log.error('Error adding user to CKAN LdapUser Table:' + str(ckan_user[name]))
+        _send_ldap_error_mail('Error adding user to CKAN LDAP User Table:' + str(ckan_user[name]) )
+        return None
+
+
     # Add the user to it's group if needed - JUST ONE LDAP SPECIFC ORGANIZATION - not for us; Anja 21.6.17
-    if 'ckanext.ldap.organization.id' in config:
-        p.toolkit.get_action('member_create')(
-            context={'ignore_auth': False},
-            data_dict={
-                'id': config['ckanext.ldap.organization.id'],
-                'object': user_name,
-                'object_type': 'user',
-                'capacity': config['ckanext.ldap.organization.role']
-            }
-        )
+    try:
+        if 'ckanext.ldap.organization.id' in config:
+            p.toolkit.get_action('member_create')(
+                context={'ignore_auth': False},
+                data_dict={
+                    'id': config['ckanext.ldap.organization.id'],
+                    'object': user_name,
+                    'object_type': 'user',
+                    'capacity': config['ckanext.ldap.organization.role']
+                }
+            )
+    except:
+        log.error('Error with CKAN DEFAULT Organization')
+
 
     # Check the users email adress and add it to the appropiate organization as Editor
     #print ldap_user_dict['email']
@@ -876,33 +938,62 @@ def _add_ldap_and_ckan_user(context, data_dict):
                 user_org = None
                 pass
 
-    #print user_name
     if user_org:
-        p.toolkit.get_action('member_create')(
-            context={'ignore_auth': False},
-            data_dict={
-                'id': user_org,
-                'object': user_name,
-                'object_type': 'user',
-                'capacity': 'editor'
-            }
-        )
-
-    # Add LdapUser entry = Database entry with match ckan_id - ldap_id
-    # FIXME: Break/rollback if it does not work?
-    try:
-        ldap_user = LdapUser(user_id=ckan_user['id'], ldap_id = ldap_user_dict['username'])
-        ckan.model.Session.add(ldap_user)
-        ckan.model.Session.commit()
-    except:
-        log.error('Error adding user to CKAN LdapUser Table:' + str(ckan_user[name]) + str (e))
-        _send_ldap_error_mail('Error adding user to CKAN LDAP User Table:' + str(ckan_user[name]) + str (e))
-        return None
+        try:
+            p.toolkit.get_action('member_create')(
+                context={'ignore_auth': True},
+                data_dict={
+                    'id': user_org,
+                    'object': user_name,
+                    'object_type': 'user',
+                    'capacity': 'editor'
+                }
+            )
+        except:
+            log.error('Error adding user to organization: ' + str(user_org) +  ', '  + str(user_name))
 
     return ckan_user
 # Ende Auto
 ##################################################################
 
+def _ckan_ldap_user_exists(user_name):
+    """Check if a CKAN user name exists, and if that user is an LDAP user.
+
+    @param user_name: User name to check
+    @return: Dictionary defining 'exists' and 'ldap'.
+    """
+    try:
+        user = p.toolkit.get_action('user_show')(data_dict = {'id': user_name})
+    except p.toolkit.ObjectNotFound:
+        # Check ldap
+        # Get LDAP User dict
+        try:
+            ldap_user_dict = _find_ldap_user(user_name)
+        except NotFound, e:
+            return {'exists': False}
+        if ldap_user_dict:
+            return {'exists': True}
+        else:
+            return {'exists': False}
+
+    return {'exists': True}
+
+def _get_unique_user_name_check_ldap (base_name):
+    """Create a unique, valid, non existent user name from the given base name
+
+    @param base_name: Base name
+    @return: A valid user name not currently in use based on base_name
+    """
+    base_name = re.sub('[^-a-z0-9_]', '_', base_name.lower())
+    base_name = base_name[0:100]
+    if len(base_name) < 2:
+        base_name = (base_name + "__")[0:2]
+    count = 0
+    user_name = base_name
+    while (_ckan_ldap_user_exists(user_name))['exists']:
+        count += 1
+        user_name = "{base}{count}".format(base=base_name[0:100-len(str(count))], count=str(count))
+    return user_name
 
 def _ckan_user_exists(user_name):
     """Check if a CKAN user name exists, and if that user is an LDAP user.
@@ -911,24 +1002,18 @@ def _ckan_user_exists(user_name):
     @return: Dictionary defining 'exists' and 'ldap'.
     """
 
-    #print "**************** Anja ckan_user_exists"
     try:
         user = p.toolkit.get_action('user_show')(data_dict = {'id': user_name})
     except p.toolkit.ObjectNotFound:
         #print "Here we are"
         return {'exists': False, 'is_ldap': False}
 
-    #print "Here we are too"
-    #print user
     ldap_user = LdapUser.by_user_id(user['id'])
-
-    #print ldap_user
 
     if ldap_user:
         return {'exists': True, 'is_ldap': True}
     else:
         return {'exists': True, 'is_ldap': False}
-
 
 def _get_unique_user_name(base_name):
     """Create a unique, valid, non existent user name from the given base name
