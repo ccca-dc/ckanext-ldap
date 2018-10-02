@@ -134,7 +134,7 @@ def add_ckan_user(context,data_dict):
             }
         )
 
-    # Check the users email adress and add it to the appropiate organization as Editor
+    # Check the users email address and add it to the appropiate organization as Editor
     #print ldap_user_dict['email']
     user_org = _check_mail_org(ldap_user_dict['email'])
 

@@ -73,7 +73,7 @@ class LdapPlugin(p.SingletonPlugin):
                    controller='ckanext.ldap.controllers.user:UserController',
                    action='delete')
 
-        #Anja, 25.9.2018 Confirm Mail Adress Auto Register
+        #Anja, 25.9.2018 Confirm Mail Address Auto Register
         map.connect('/confirm_mail/{id:.*}',
                     controller='ckanext.ldap.controllers.user:UserController',
                     action='confirm_mail')

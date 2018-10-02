@@ -320,11 +320,11 @@ class UserController(p.toolkit.BaseController):
         send_from = 'new_user@data.ccca.ac.at'
         send_to = ['datenzentrum@ccca.ac.at']
         subject = 'New User: ' + data_dict['name']
-        text = 'A new user registered: Username ' + str(data_dict['name']) + ', fullname: ' + str(data_dict['fullname']) + ', Mailadress: '+ str(data_dict['email'])
+        text = 'A new user registered: Username ' + str(data_dict['name']) + ', fullname: ' + str(data_dict['fullname']) + ', Mailaddress: '+ str(data_dict['email'])
         _send_mail(send_from, send_to, subject, text)
 
         #End and success
-        h.flash_success('''You registered succesfully to the CCCA Datacentre.
+        h.flash_success('''You registered successfully to the CCCA Datacentre.
         Please check your inbox for the verification of your email-address.''')
         return render('user/login.html')
 
@@ -601,7 +601,7 @@ class UserController(p.toolkit.BaseController):
 
         c.user_dict = user_dict
         if success:
-            h.flash_success(_("Email adress succesfully confirmed. Feel free to login now."))
+            h.flash_success(_("Email address successfully confirmed. Feel free to login now."))
 
         return render('user/login.html')
 
@@ -628,7 +628,7 @@ class UserController(p.toolkit.BaseController):
                 return self._login_failed(error=_('Unknown User. Please register first or contact datenzentrum@ccca.ac.at if you are uncertain about this message'))
             if user_dict:
                 if user_dict['state'] == 'waiting':  # waiting for email confirmation
-                    return self._login_failed(error=_('Your Email Adress is not yet verified. Please check your inbox for the email confirmation link'))
+                    return self._login_failed(error=_('Your Email Address is not yet verified. Please check your inbox for the email confirmation link'))
 
             try:
                 ldap_user_dict = _find_ldap_user(login)
@@ -918,7 +918,7 @@ def _add_ldap_and_ckan_user(context, data_dict):
         log.error('Error with CKAN DEFAULT Organization')
 
 
-    # Check the users email adress and add it to the appropiate organization as Editor
+    # Check the users email address and add it to the appropiate organization as Editor
     #print ldap_user_dict['email']
     #FIXME: Check this first if we only want CCCA members
     user_org = check_mail_org(data_dict['email'])
