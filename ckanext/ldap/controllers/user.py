@@ -615,7 +615,7 @@ class UserController(p.toolkit.BaseController):
         c.user_dict = user_dict
         if success:
             h.flash_success(_("Email address successfully confirmed. Feel free to login now."))
-
+            log.info("USER_CREATE: User " + user_dict['name'] + " confirmed the email address successfully")
         return render('user/login.html')
 
     def login_handler(self):
