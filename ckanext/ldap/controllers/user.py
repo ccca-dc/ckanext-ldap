@@ -260,6 +260,12 @@ class UserController(p.toolkit.BaseController):
                 error_msg = _(u'Please insert a valid mail address.')
                 h.flash_error(error_msg)
                 return self._auto_register_request(data_dict)
+            # For Ldap Fullname must consist out of two parts
+            check_parts= full_name.strip().split(' ')
+            if len(check_parts) <2:
+                error_msg = _(u'Please insert full full name.')
+                h.flash_error(error_msg)
+                return self._auto_register_request(data_dict)
 
             # ATTENTION: This action requires that userlist is available for anon users!
             u_list = p.toolkit.get_action('user_list')({},{"order_by": "email"})
@@ -388,6 +394,13 @@ class UserController(p.toolkit.BaseController):
             #print new_mail
             if new_mail == u'':
                 error_msg = _(u'Please insert a valid mail address.')
+                h.flash_error(error_msg)
+                return self.new_mail_request(data_dict)
+
+            # For Ldap Fullname must consist out of two parts
+            check_parts= full_name.strip().split(' ')
+            if len(check_parts) <2:
+                error_msg = _(u'Please insert full full name.')
                 h.flash_error(error_msg)
                 return self.new_mail_request(data_dict)
 
@@ -758,7 +771,6 @@ def _add_ldap_and_ckan_user(context, data_dict):
 
     try:
         r = check_access('user_create', context, data_dict)
-        print "check_access " + str(r)
     except:
         session.rollback()
         raise ValidationError('Unauthorized to create a user')
@@ -800,6 +812,7 @@ def _add_ldap_and_ckan_user(context, data_dict):
 
     hash_password = _make_secret(data_dict['password1'])
 
+    # We need a new dict because of ckan add (see below)
     ldap_data_dict = dict((k, v.encode('utf-8')) for (k, v) in data_dict.items())
 
     # Create ldap user
@@ -825,9 +838,9 @@ def _add_ldap_and_ckan_user(context, data_dict):
         #print entry_user
         #print _find_ldap_user(user_name)
         result = cnx.add_s(dn_user, ldap.modlist.addModlist(entry_user))
-    except:
-        log.error('Error creating LDAP User:' + str(ldap_data_dict['name']))
-        _send_ldap_error_mail('Error creating LDAP User: ' + str(ldap_data_dict['name']))
+    except ldap.LDAPError, e:
+        log.error('Error creating LDAP User: ' + str(ldap_data_dict['name']) + ' ' + str(e))
+        _send_ldap_error_mail('Error creating LDAP User: ' + str(ldap_data_dict['name']) + ' ' + str(e))
         cnx.unbind()
         return None
 
@@ -842,9 +855,9 @@ def _add_ldap_and_ckan_user(context, data_dict):
                        'memberUid': [ldap_data_dict['name']]}
         result = cnx.add_s(dn_group, ldap.modlist.addModlist(entry_group))
 
-    except:
-        log.error('Error creating LDAP User Group:' + str(ldap_data_dict['name']))
-        _send_ldap_error_mail('Error creating LDAP User Group: ' + str(ldap_data_dict['name']))
+    except ldap.LDAPError, e:
+        log.error('Error creating LDAP User Group: ' + str(ldap_data_dict['name']) + ' ' + str(e) )
+        _send_ldap_error_mail('Error creating LDAP User Group: ' + str(ldap_data_dict['name']) + ' ' + str(e))
         cnx.unbind()
         return None
 
@@ -854,13 +867,15 @@ def _add_ldap_and_ckan_user(context, data_dict):
         entry_group_users = [(ldap.MOD_ADD,'memberUid',[ldap_data_dict['name']])]
         #result = cnx.modify_s(dn_group_users, ldap.modlist.addModlist(entry_group_users))
         result = cnx.modify_s(dn_group_users, entry_group_users)
-    except:
-        log.error('Error adding LDAP User to General User Group: '  + str(ldap_data_dict['name']))
-        _send_ldap_error_mail('Error adding LDAP User to General User Group: ' + str(ldap_data_dict['name']))
+    except ldap.LDAPError, e:
+        log.error('Error adding LDAP User to General User Group: '  + str(ldap_data_dict['name']) + ' ' + str(e))
+        _send_ldap_error_mail('Error adding LDAP User to General User Group: ' + str(ldap_data_dict['name']) + ' ' + str(e))
         cnx.unbind()
         return None
 
     cnx.unbind()
+
+    log.info("USER_CREATE - User " + str(ldap_data_dict['name'])+ " successfully added to LDAP")
 
     #########################################################
     # Now CKAN
@@ -885,10 +900,14 @@ def _add_ldap_and_ckan_user(context, data_dict):
             if ldap_user_dict:
                 _delete_ldap_user(ldap_user_dict)
                 log.error('LDAP User deleted because of errors creating CKAN user '  + data_dict['name'])
+            else:
+                log.error('Error removing LDAP User '  + data_dict['name'])
         except:
                 log.error('Error removing LDAP User: '  + data_dict['name'])
 
         return None
+
+    log.info("USER_CREATE - User " + str(ckan_user['name'])+ " successfully added to CKAN")
 
     # Add LdapUser entry = Database entry with match ckan_id - ldap_id
     # FIXME: Break/rollback if it does not work?
@@ -901,15 +920,17 @@ def _add_ldap_and_ckan_user(context, data_dict):
         _send_ldap_error_mail('Error adding user to CKAN LDAP User Table:' + str(ckan_user[name]) )
         return None
 
+    log.info("USER_CREATE - User " + str(ckan_user['name'])+ " successfully added to CKAN_LDAP table")
 
-    # Add the user to it's group if needed - JUST ONE LDAP SPECIFC ORGANIZATION - not for us; Anja 21.6.17
+    # Add the user to it's group if needed - JUST ONE LDAP SPECIFC ORGANIZATION
+    # - not for us!!!; Anja 21.6.17
     try:
         if 'ckanext.ldap.organization.id' in config:
             p.toolkit.get_action('member_create')(
                 context={'ignore_auth': False},
                 data_dict={
                     'id': config['ckanext.ldap.organization.id'],
-                    'object': user_name,
+                    'object': ckan_user['name'],
                     'object_type': 'user',
                     'capacity': config['ckanext.ldap.organization.role']
                 }
@@ -928,12 +949,9 @@ def _add_ldap_and_ckan_user(context, data_dict):
         # check ccca-extern
         if 'ckanext.iauth.special_org' in config:
             user_org = config.get( 'ckanext.iauth.special_org')
-            #print "************ 2"
 
-            #print user_org
-            # check if org exists
             try:
-                check_org = tk.get_action('organization_show')(context, {'id':user_org})
+                check_org = p.toolkit.get_action('organization_show')(context, {'id':user_org})
             except:
                 user_org = None
                 pass
@@ -944,13 +962,15 @@ def _add_ldap_and_ckan_user(context, data_dict):
                 context={'ignore_auth': True},
                 data_dict={
                     'id': user_org,
-                    'object': user_name,
+                    'object': ckan_user['name'],
                     'object_type': 'user',
                     'capacity': 'editor'
                 }
             )
         except:
             log.error('Error adding user to organization: ' + str(user_org) +  ', '  + str(user_name))
+
+    log.info("USER_CREATE - User " + str(ckan_user['name'])+ " successfully added to organization " + str(user_org))
 
     return ckan_user
 # Ende Auto
@@ -1389,7 +1409,7 @@ def _send_mail(send_from, send_to, subject, text):
             smtp_connection.login(smtp_user, smtp_password)
 
         smtp_connection.sendmail(send_from, send_to, msg.as_string())
-        log.info("Sent email to {0}".format(send_to))
+        log.info("USER_CREATE - Sent email to {0}".format(send_to))
 
     except smtplib.SMTPException, e:
         msg = '%r' % e
