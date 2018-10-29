@@ -8,6 +8,9 @@ from ckanext.ldap.logic.auth.update import user_update
 from ckanext.ldap.logic.auth.create import user_create
 from ckanext.ldap.model.ldap_user import setup as model_setup
 from ckanext.ldap.lib.helpers import is_ldap_user
+from ckanext.ldap.lib.helpers import check_mail_org
+from ckanext.ldap.lib.helpers import check_user_datasets
+
 
 import ckanext.ldap.logic.action as action
 
@@ -65,13 +68,22 @@ class LdapPlugin(p.SingletonPlugin):
                     controller='ckanext.ldap.controllers.user:UserController',
                     action='register')
 
+        # Anja, 12.9.18 Delete user
+        map.connect('user_delete', '/user/delete/{id}',
+                   controller='ckanext.ldap.controllers.user:UserController',
+                   action='delete')
+
+        #Anja, 25.9.2018 Confirm Mail Address Auto Register
+        map.connect('/confirm_mail/{id:.*}',
+                    controller='ckanext.ldap.controllers.user:UserController',
+                    action='confirm_mail')
+
         return map
 
     def get_auth_functions(self):
         """Implements IAuthFunctions.get_auth_functions"""
         return {
-            'user_update': user_update,
-            'user_create': user_create
+            'user_update': user_update
         }
 
     def configure(self, main_config):
@@ -161,7 +173,9 @@ class LdapPlugin(p.SingletonPlugin):
 
     def get_helpers(self):
         return {
-            'is_ldap_user': is_ldap_user
+            'is_ldap_user': is_ldap_user,
+            'check_mail_org' : check_mail_org,
+            'check_user_datasets' : check_user_datasets
         }
 
 

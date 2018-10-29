@@ -134,7 +134,7 @@ def add_ckan_user(context,data_dict):
             }
         )
 
-    # Check the users email adress and add it to the appropiate organization as Editor
+    # Check the users email address and add it to the appropiate organization as Editor
     #print ldap_user_dict['email']
     user_org = _check_mail_org(ldap_user_dict['email'])
 
@@ -177,8 +177,8 @@ def add_ckan_user(context,data_dict):
         return "Hooray! User " + user_name + " successfully created in CKAN (no Organization was applicable)"
 
 def _check_mail_org(user_email):
-    ccca_orgs= [u'mul', u'seri', u'ages', u'ait', u'alps', u'bayerische-akademie-der-wissenschaften', u'bfw-bundesforschungszentrum-fur-wald', u'boku', u'ccca', u'donau-uni',u'essl', u'gba', u'iiasa', u'iio', u'jr', u'oaw', u'ogm', u'tu-graz', u'tu-wien', u'uba', u'uibk', u'uni-salzburg', u'uni-wien', u'vetmeduni', u'uni-graz', u'wifo', u'wp', u'wu', u'zamg', u'zsi']
-    ccca_mails = [u'unileoben.ac.at', u'seri.at', u'ages.at',u'ait.ac.at',u'alps-gmbh.com',u'badw.de',u'bfw.gv.at',u'boku.ac.at', u'ccca.ac.at', u'donau-uni.ac.at', u'essl.org',u'geologie.ac.at',u'iiasa.ac.at',u'indoek.at',u'joanneum.at', u'oeaw.ac.at', u'meteorologie.at', u'tugraz.at', u'tuwien.ac.at', u'umweltbundesamt.at',u'uibk.ac.at',u'sbg.ac.at', u'univie.ac.at',u'vetmeduni.ac.at', u'uni-graz.at', u'wifo.ac.at', u'weatherpark.com', u'wu.ac.at',u'zamg.ac.at', u'zsi.at']
+    ccca_orgs= [u'mul', u'seri', u'ages', u'ait', u'alps', u'bayerische-akademie-der-wissenschaften', u'bfw-bundesforschungszentrum-fur-wald', u'boku', u'ccca', u'donau-uni',u'essl', u'gba', u'iiasa', u'iio', u'jr', u'oaw', u'ogm', u'tu-graz', u'tu-wien',  u'uibk', u'uni-salzburg', u'uni-wien', u'vetmeduni', u'uni-graz', u'wifo', u'wp', u'wu', u'zamg', u'zsi']
+    ccca_mails = [u'unileoben.ac.at', u'seri.at', u'ages.at',u'ait.ac.at',u'alps-gmbh.com',u'badw.de',u'bfw.gv.at',u'boku.ac.at', u'ccca.ac.at', u'donau-uni.ac.at', u'essl.org',u'geologie.ac.at',u'iiasa.ac.at',u'indoek.at',u'joanneum.at', u'oeaw.ac.at', u'meteorologie.at', u'tugraz.at', u'tuwien.ac.at',u'uibk.ac.at',u'sbg.ac.at', u'univie.ac.at',u'vetmeduni.ac.at', u'uni-graz.at', u'wifo.ac.at', u'weatherpark.com', u'wu.ac.at',u'zamg.ac.at', u'zsi.at']
 
     #print len (ccca_orgs)
     #print len(ccca_mails)
@@ -222,7 +222,7 @@ def ldap_mail_org(context, data_dict):
                 u'bayerische-akademie-der-wissenschaften',
                 u'bfw-bundesforschungszentrum-fur-wald', u'boku', u'ccca',
                 u'donau-uni', u'essl', u'gba', u'iiasa', u'iio', u'jr', u'oaw', u'ogm',
-                u'tu-graz', u'tu-wien', u'uba', u'uibk', u'uma', u'uni-salzburg',
+                u'tu-graz', u'tu-wien',  u'uibk', u'uma', u'uni-salzburg',
                 u'uni-wien', u'vetmeduni', u'uni-graz', u'wifo', u'wp', u'wu', u'zamg',
                 u'zsi']
 
@@ -231,7 +231,7 @@ def ldap_mail_org(context, data_dict):
                   u'donau-uni.ac.at', u'essl.org', u'geologie.ac.at',
                   u'iiasa.ac.at', u'indoek.at', u'joanneum.at', u'oeaw.ac.at',
                   u'meteorologie.at', u'tugraz.at', u'tuwien.ac.at',
-                  u'umweltbundesamt.at', u'uibk.ac.at', u'uma.or.at',
+                  u'uibk.ac.at', u'uma.or.at',
                   u'sbg.ac.at', u'univie.ac.at', u'vetmeduni.ac.at',
                   u'uni-graz.at', u'wifo.ac.at', u'weatherpark.com',
                   u'wu.ac.at',u'zamg.ac.at', u'zsi.at']

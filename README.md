@@ -63,7 +63,7 @@ API Access
 
 curl -X POST http://127.0.0.1:5000/api/3/action/add_ckan_user -H "Authorization: <API_Key>"  -d '{"name": "<username>"}'
 
-Based on the mail adress the user will become an editor (i.e. is allowed to create and manage his own datasets) of the respective organization if applicable; organization matching is based on the following rules:
+Based on the mail address the user will become an editor (i.e. is allowed to create and manage his own datasets) of the respective organization if applicable; organization matching is based on the following rules:
 
 ccca_orgs= [u'mul',u'seri, u'ages', u'ait', u'alps', u'bayerische-akademie-der-wissenschaften', u'bfw-bundesforschungszentrum-fur-wald', u'boku', u'ccca', u'essl', u'gba', u'iiasa', u'iio', u'jr',  u'oaw', u'ogm',  u'tu-graz', u'tu-wien', u'uba', u'uibk', u'uni-salzburg', u'uni-wien', u'vetmeduni', u'wegener-center', u'wifo', u'wp', u'wu', u'zamg', u'zsi',u'usertest-organization']
 
