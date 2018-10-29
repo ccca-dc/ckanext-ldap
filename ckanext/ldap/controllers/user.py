@@ -247,7 +247,6 @@ class UserController(p.toolkit.BaseController):
                     full_name = v
                 if (k == 'name'):
                     user_name = v
-
             if full_name == u'':
                 error_msg = _(u'Please insert full name.')
                 h.flash_error(error_msg)
@@ -260,6 +259,15 @@ class UserController(p.toolkit.BaseController):
                 error_msg = _(u'Please insert a valid mail address.')
                 h.flash_error(error_msg)
                 return self._auto_register_request(data_dict)
+
+            # Anja 29.10.2018 check uname Ascii
+            try:
+                user_name.decode('ascii')
+            except:
+                error_msg = _(u'Please do not use any special characters within the username.')
+                h.flash_error(error_msg)
+                return self._auto_register_request(data_dict)
+
             # For Ldap Fullname must consist out of two parts
             check_parts= full_name.strip().split(' ')
             if len(check_parts) <2:
@@ -325,8 +333,8 @@ class UserController(p.toolkit.BaseController):
         #Send register information to admins
         send_from = 'new_user@data.ccca.ac.at'
         send_to = ['datenzentrum@ccca.ac.at']
-        subject = 'New User: ' + data_dict['name']
-        text = 'A new user registered: Username ' + str(data_dict['name']) + ', fullname: ' + str(data_dict['fullname']) + ', Mailaddress: '+ str(data_dict['email'])
+        subject = 'New User: ' + str(data_dict['name'])
+        text = 'A new user registered: Username ' + str(data_dict['name']) + ', Mailaddress: '+ str(data_dict['email'])
         _send_mail(send_from, send_to, subject, text)
 
         #End and success
@@ -626,6 +634,9 @@ class UserController(p.toolkit.BaseController):
 
         if 'login' in params and 'password' in params:
             login = params['login']
+            if login:
+                login = login.lower()
+
             password = params['password']
             if not password: # ldap does not allow emtpy password; Anja 21.6.2017
                 self._login_failed(error=_('Please enter a username and password'))
